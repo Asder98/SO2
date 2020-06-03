@@ -1,0 +1,5 @@
+# Project exclude paths
+/venv/
+/.idea
+philosophers.py
+SO2_Etap1_Jakub_Grzybek.zip
