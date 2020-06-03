@@ -5,6 +5,7 @@ import curses
 
 AMOUNT = 15  # ilość aut
 PITSTOPSAMOUNT = 2
+LAPS = 15
 WIDTH = 72  # szerokość okna programu
 HEIGHT = AMOUNT + 3  # wyskość okna programu
 COL1 = 0  # kolumna pierwsza
@@ -18,7 +19,7 @@ TIMEOUT = 100  # timeout funkcji getch(). Ustala również częstotliwość odś
 class Car(threading.Thread):  # obiekt filozofa
     running = True
 
-    def __init__(self, xid, pitstops):
+    def __init__(self, xid, pitstops, lapstogo):
         threading.Thread.__init__(self)
         self.id = xid  # id filozofa
         self.pitstops = pitstops
@@ -26,11 +27,12 @@ class Car(threading.Thread):  # obiekt filozofa
         self.progress = 0  # progres aktualnej czynności, używany do loading barów w oknie
         self.fuellevel = random.randint(50, 100)
         self.laps = 0
+        self.lapstogo = lapstogo
 
     def run(self):
         while self.running:
             self.state = "Na torze"
-            laptime = random.uniform(.25, .35) # ustalenie czasu okrążenia
+            laptime = random.uniform(.15, .20)  # ustalenie czasu okrążenia
             for i in range(10):
                 time.sleep(laptime)
                 self.progress += 1
@@ -41,12 +43,15 @@ class Car(threading.Thread):  # obiekt filozofa
                 self.running = False
             else:
                 self.laps += 1
-                if self.fuellevel <= 30:
+                if self.laps == self.lapstogo:
+                    self.state = "Meta"
+                    self.running = False
+                elif self.fuellevel <= 30:
                     self.state = "Chce zjechać"
-                    self.service()  # samochód chce zjechać
+                    self.service()
 
     def calcFuel(self):
-        self.fuellevel -= random.randint(5, 10)
+        self.fuellevel -= random.randint(8, 15)
 
     def service(self):
         locked = False
@@ -68,7 +73,7 @@ class Car(threading.Thread):  # obiekt filozofa
 
     def operation(self):
         self.state = "W pitstopie"
-        operationtime = random.uniform(.25, .35)  # ustalanie czasu postoju. postój zajmie 10x operationtime
+        operationtime = random.uniform(.08, .10)  # ustalanie czasu postoju. postój zajmie 10x operationtime
         for i in range(10):
             time.sleep(operationtime)
             self.progress += 1
@@ -102,11 +107,13 @@ def renderWindow(xwindow):  # generowanie wyświetlanego okna
         state = cars[i].state
 
         if state == "Na torze":
-            color = 35 #35
+            color = 35  # 35
         elif state == "W pitstopie":
             color = 40
+        elif state == "Zabrakło paliwa":
+            color = 161
         else:
-            color = 1 #1
+            color = 1  # 1
 
         xwindow.addstr(i + 2, COL2 + 1, str(state), curses.color_pair(color))
         xwindow.addstr(i + 2, COL3 + 1, " [")
@@ -115,7 +122,19 @@ def renderWindow(xwindow):  # generowanie wyświetlanego okna
         for j in range(progress):
             xwindow.addstr(i + 2, COL3 + 3 + j, "#", curses.color_pair(color))
         fuel = cars[i].fuellevel
-        xwindow.addstr(i + 2, COL4 + 1, str(fuel))
+
+        if fuel > 50:
+            color = 35  # 35
+        elif 30 <= fuel <= 50:
+            color = 167
+        elif 1 <= fuel <= 29:
+            color = 161
+        elif fuel <= 0:
+            color = 9
+        else:
+            color = 1  # 1
+
+        xwindow.addstr(i + 2, COL4 + 1, str(fuel), curses.color_pair(color))
         laps = cars[i].laps
         xwindow.addstr(i + 2, COL5 + 1, str(laps))
 
@@ -129,14 +148,16 @@ if __name__ == '__main__':
     curses.curs_set(0)
     curses.start_color()
     curses.use_default_colors()
-    for i in range(0, curses.COLORS):
-        curses.init_pair(i + 1, i, -1)
+    for i in range(1, curses.COLORS + 1):
+        curses.init_pair(i, i - 1, -1)
     window.border(0)
 
     pitstops = [threading.Lock() for n in range(PITSTOPSAMOUNT)]
 
-    cars = [Car(i, pitstops)  # tworzenie filozofów
+    cars = [Car(i, pitstops, LAPS)  # tworzenie filozofów
             for i in range(AMOUNT)]
+
+    scoreboard = []
 
     random.seed(507129)
     # Car.running = True
